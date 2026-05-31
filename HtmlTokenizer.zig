@@ -72,7 +72,7 @@ pub fn init(buffer: [:0]const u8) Self {
 pub fn next(self: *Self, index: *usize) Token {
     var start = index.*;
 
-    state: switch (self.state) {
+    return state: switch (self.state) {
         // https://html.spec.whatwg.org/multipage/parsing.html#data-state
         .data => switch (self.buffer[index.*]) {
             0 => continue :state .eof,
@@ -103,23 +103,11 @@ pub fn next(self: *Self, index: *usize) Token {
             '?' => continue :state .bogus_comment,
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
             else => {
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state
@@ -130,13 +118,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 self.state = .data;
                 continue :state .data;
             },
-            0 => return .{
-                .loc = .{
-                    .start = start,
-                    .end = index.*,
-                },
-                .tag = .invalid,
-            },
+            0 => break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid },
             else => continue :state .bogus_comment,
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state
@@ -145,13 +127,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .before_attribute_name;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .open_tag,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .open_tag };
             },
             '/' => {
                 index.* += 1;
@@ -161,26 +137,9 @@ pub fn next(self: *Self, index: *usize) Token {
             '>' => {
                 const end = index.*;
                 index.* += 1;
-
-                if (self.close_type == .true) {
-                    self.state = .data;
-                    return .{
-                        .loc = .{
-                            .start = start,
-                            .end = end,
-                        },
-                        .tag = .close_tag,
-                    };
-                }
-
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .open_tag,
-                };
+                const tag: TokenTag = if (self.close_type == .true) .close_tag else .open_tag;
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = tag };
             },
             'A'...'Z', 'a'...'z', '0'...'9' => {
                 index.* += 1;
@@ -188,13 +147,7 @@ pub fn next(self: *Self, index: *usize) Token {
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
             else => {
                 index.* += 1;
@@ -206,23 +159,11 @@ pub fn next(self: *Self, index: *usize) Token {
             '>' => {
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .self_close_tag,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .self_close_tag };
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
             else => continue :state .before_attribute_name,
         },
@@ -234,23 +175,11 @@ pub fn next(self: *Self, index: *usize) Token {
             },
             0, '/', '>' => {
                 self.state = .after_attribute_name;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.* - 1,
-                    },
-                    .tag = .attribute_name,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* - 1 }, .tag = .attribute_name };
             },
             '=' => {
                 self.state = .attribute_name;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.* - 1,
-                    },
-                    .tag = .attribute_name,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* - 1 }, .tag = .attribute_name };
             },
             else => continue :state .attribute_name,
         },
@@ -258,25 +187,13 @@ pub fn next(self: *Self, index: *usize) Token {
         .attribute_name => switch (self.buffer[index.*]) {
             '\t', '\n', ' ', '/', '>', '\x0C', '\r', 0 => {
                 self.state = .after_attribute_name;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .attribute_name,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .attribute_name };
             },
             '=' => {
                 const end = index.*;
                 index.* += 1;
                 self.state = .before_attribute_value;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .attribute_name,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .attribute_name };
             },
             else => {
                 index.* += 1;
@@ -302,34 +219,12 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-
-                if (self.close_type == .true) {
-                    return .{
-                        .loc = .{
-                            .start = start,
-                            .end = end,
-                        },
-                        .tag = .close_tag,
-                    };
-                }
-
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .open_tag_end,
-                };
+                const tag: TokenTag = if (self.close_type == .true) .close_tag else .open_tag_end;
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = tag };
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
             else => continue :state .attribute_name,
         },
@@ -353,13 +248,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .invalid };
             },
             else => continue :state .attribute_value_unquoted,
         },
@@ -369,31 +258,15 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .after_attribute_value_quoted;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .attribute_value,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .attribute_value };
             },
-            '&' => {
+            else => {
                 index.* += 1;
                 continue :state .attribute_value_single_quoted;
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
-            },
-            else => {
-                index.* += 1;
-                continue :state .attribute_value_single_quoted;
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
@@ -412,23 +285,11 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .open_tag_end,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .open_tag_end };
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
             else => continue :state .before_attribute_name,
         },
@@ -438,31 +299,15 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .after_attribute_value_quoted;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .attribute_value,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .attribute_value };
             },
-            '&' => {
+            else => {
                 index.* += 1;
                 continue :state .attribute_value_double_quoted;
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
-            },
-            else => {
-                index.* += 1;
-                continue :state .attribute_value_double_quoted;
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
@@ -471,50 +316,20 @@ pub fn next(self: *Self, index: *usize) Token {
                 index.* += 1;
                 continue :state .before_attribute_name;
             },
-            '&' => {
-                index.* += 1;
-                continue :state .attribute_value_unquoted;
-            },
             '>' => {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-
-                if (self.close_type == .true) {
-                    return .{
-                        .loc = .{
-                            .start = start,
-                            .end = end,
-                        },
-                        .tag = .close_tag,
-                    };
-                }
-
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .open_tag_end,
-                };
+                const tag: TokenTag = if (self.close_type == .true) .close_tag else .open_tag_end;
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = tag };
             },
-            '"', '\'', '<', '=', '`' => {
+            else => {
                 index.* += 1;
                 continue :state .attribute_value_unquoted;
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .invalid,
-                };
-            },
-            else => {
-                index.* += 1;
-                continue :state .attribute_value_unquoted;
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .invalid };
             },
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
@@ -538,23 +353,11 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .comment };
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .comment };
             },
             else => {
                 index.* += 1;
@@ -571,13 +374,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .comment };
             },
             else => continue :state .comment_state,
         },
@@ -591,23 +388,11 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .comment };
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .comment };
             },
             else => continue :state .comment_state,
         },
@@ -619,13 +404,7 @@ pub fn next(self: *Self, index: *usize) Token {
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .comment };
             },
             else => {
                 index.* += 1;
@@ -640,13 +419,7 @@ pub fn next(self: *Self, index: *usize) Token {
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .comment };
             },
             else => {
                 index.* += 1;
@@ -659,13 +432,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.* - 2;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .comment };
             },
             '-' => {
                 index.* += 1;
@@ -673,13 +440,7 @@ pub fn next(self: *Self, index: *usize) Token {
             },
             0 => {
                 self.state = .eof;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .comment,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .comment };
             },
             else => {
                 index.* += 1;
@@ -697,15 +458,9 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{ .start = start, .end = end },
-                    .tag = .doctype,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .doctype };
             },
-            0 => return .{
-                .loc = .{ .start = index.*, .end = index.* },
-                .tag = .eof,
-            },
+            0 => break :state .{ .loc = .{ .start = index.*, .end = index.* }, .tag = .eof },
             else => continue :state .doctype,
         },
         // https://html.spec.whatwg.org/multipage/parsing.html#doctype-state
@@ -714,21 +469,9 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .doctype,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .doctype };
             },
-            0 => return .{
-                .loc = .{
-                    .start = index.*,
-                    .end = index.*,
-                },
-                .tag = .eof,
-            },
+            0 => break :state .{ .loc = .{ .start = index.*, .end = index.* }, .tag = .eof },
             else => {
                 index.* += 1;
                 continue :state .doctype;
@@ -740,13 +483,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 index.* += 1;
                 continue :state .cdata_section_bracket;
             },
-            0 => return .{
-                .loc = .{
-                    .start = index.*,
-                    .end = index.*,
-                },
-                .tag = .eof,
-            },
+            0 => break :state .{ .loc = .{ .start = index.*, .end = index.* }, .tag = .eof },
             else => {
                 index.* += 1;
                 continue :state .cdata_section;
@@ -766,13 +503,7 @@ pub fn next(self: *Self, index: *usize) Token {
                 const end = index.*;
                 index.* += 1;
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = end,
-                    },
-                    .tag = .text,
-                };
+                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .text };
             },
             ']' => {
                 index.* += 1;
@@ -784,13 +515,7 @@ pub fn next(self: *Self, index: *usize) Token {
         .text => switch (self.buffer[index.*]) {
             0, '<' => {
                 self.state = .data;
-                return .{
-                    .loc = .{
-                        .start = start,
-                        .end = index.*,
-                    },
-                    .tag = .text,
-                };
+                break :state .{ .loc = .{ .start = start, .end = index.* }, .tag = .text };
             },
             else => {
                 index.* += 1;
@@ -798,14 +523,6 @@ pub fn next(self: *Self, index: *usize) Token {
             },
         },
 
-        .eof => return .{
-            .loc = .{
-                .start = index.*,
-                .end = index.*,
-            },
-            .tag = .eof,
-        },
-    }
-
-    unreachable;
+        .eof => break :state .{ .loc = .{ .start = index.*, .end = index.* }, .tag = .eof },
+    };
 }
