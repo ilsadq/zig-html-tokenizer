@@ -15,7 +15,8 @@ Add to `build.zig.zon`:
 ```zig
 .dependencies = .{
     .zig_html_tokenizer = .{
-        .path = "../zig-html-tokenizer", // or a .url + .hash for a fetched package
+        .url = "https://github.com/ilsadq/zig-html-tokenizer/archive/refs/heads/main.tar.gz",
+        .hash = "zig_html_tokenizer-0.0.1-aALtTZdXDwBaMjl4aS3UNt1S2xrmP9noouyYqgVRwsvP",
     },
 },
 ```
