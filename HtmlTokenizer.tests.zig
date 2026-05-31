@@ -14,9 +14,8 @@ fn e(tag: TokenTag, slice: []const u8) E {
 
 fn expectTokens(buf: [:0]const u8, expected: []const E) !void {
     var tok = HtmlTokenizer.init(buf);
-    var index: usize = 0;
     for (expected, 0..) |exp, i| {
-        const token = tok.next(&index);
+        const token = tok.next();
         errdefer std.debug.print(
             "token[{d}]: expected .{s}, got .{s}\n",
             .{ i, @tagName(exp.tag), @tagName(token.tag) },
@@ -348,21 +347,20 @@ test "attribute value with ampersand" {
 test "HTML Standard fully tokenizes without panic" {
     const html: [:0]const u8 = @embedFile("HTML Standard.html");
     var tok = HtmlTokenizer.init(html);
-    var index: usize = 0;
     var count: usize = 0;
 
     while (true) {
-        const token = tok.next(&index);
+        const token = tok.next();
         try testing.expect(token.loc.end <= html.len);
         count += 1;
         if (token.tag == .eof) break;
         if (count > html.len + 1) {
-            std.debug.print("infinite loop: count={d} index={d}\n", .{ count, index });
+            std.debug.print("infinite loop: count={d} index={d}\n", .{ count, tok.index });
             return error.InfiniteLoop;
         }
     }
 
-    try testing.expectEqual(TokenTag.eof, tok.next(&index).tag);
+    try testing.expectEqual(TokenTag.eof, tok.next().tag);
     try testing.expect(count > 10_000);
     std.debug.print("HTML Standard: {d} tokens\n", .{count});
 }
@@ -382,9 +380,8 @@ test "bench HTML Standard" {
 
     for (0..iterations) |_| {
         var tok = HtmlTokenizer.init(html);
-        var index: usize = 0;
         while (true) {
-            const token = tok.next(&index);
+            const token = tok.next();
             token_count += 1;
             if (token.tag == .eof) break;
         }

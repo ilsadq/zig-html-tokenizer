@@ -93,21 +93,20 @@ fn fuzzTokenizer(_: void, smith: *std.testing.Smith) anyerror!void {
     const input: [:0]const u8 = buf[0..2048 :0];
 
     var tok = HtmlTokenizer.init(input);
-    var index: usize = 0;
     var prev_index: usize = 0;
 
     var limit: usize = input.len + 1000;
     while (limit > 0) : (limit -= 1) {
-        const token = tok.next(&index);
+        const token = tok.next();
 
         if (token.loc.end > input.len) std.debug.panic("LocEndOutOfBounds", .{});
         if (token.loc.start > input.len) std.debug.panic("LocStartOutOfBounds", .{});
-        if (index < prev_index) std.debug.panic("IndexDecreased", .{});
+        if (tok.index < prev_index) std.debug.panic("IndexDecreased", .{});
 
-        prev_index = index;
+        prev_index = tok.index;
 
         if (token.tag == .eof) {
-            const again = tok.next(&index);
+            const again = tok.next();
             if (again.tag != .eof) std.debug.panic("EofNotSticky", .{});
             break;
         }
