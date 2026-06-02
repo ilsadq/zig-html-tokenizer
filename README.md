@@ -50,7 +50,7 @@ Output:
 open_tag: "p"
 attribute_name: "class"
 attribute_value: "note"
-open_tag_end: ""
+r_bracket: ">"
 text: "hello"
 close_tag: "p"
 ```
@@ -61,17 +61,17 @@ close_tag: "p"
 |---|---|
 | `open_tag` | tag name (`p`, `div`, …) |
 | `close_tag` | tag name |
-| `self_close_tag` | `/>` (or `name/>` for `<br/>`) |
-| `open_tag_end` | empty, or the value for unquoted attributes |
+| `self_close_tag` | `/>` |
+| `r_bracket` | `>` that closes the open tag; for unquoted attribute values the slice includes the value too (`foo>`) |
 | `attribute_name` | attribute name |
 | `attribute_value` | quoted attribute value (without quotes) |
 | `text` | raw text between tags |
 | `comment` | content between `<!--` and `-->` |
-| `doctype` | name after `DOCTYPE ` |
+| `doctype` | name after `DOCTYPE ` (case-insensitive match) |
 | `invalid` | malformed input; tokenizer recovers and continues |
 | `eof` | end of input; sticky — keeps returning `eof` |
 
-Attributes arrive as `attribute_name` followed (if there is a value) by `attribute_value`. A boolean attribute like `disabled` produces only `attribute_name`. The tag closes with `open_tag_end` or `self_close_tag`.
+Attributes arrive as `attribute_name` followed (if there is a value) by `attribute_value`. A boolean attribute like `disabled` produces only `attribute_name`. The tag closes with `r_bracket` or `self_close_tag`.
 
 ## Building and testing
 
