@@ -54,7 +54,7 @@ pub const TokenTag = enum {
     attribute_name,
     attribute_value,
     self_close_tag,
-    open_tag_end,
+    r_bracket,
 };
 
 pub const Token = struct {
@@ -159,6 +159,7 @@ pub fn next(self: *Self) Token {
         // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
         .self_closing_start_tag => switch (self.buffer[self.index]) {
             '>' => {
+                start = self.index - 1;
                 self.index += 1;
                 self.state = .data;
                 break :state .{ .loc = .{ .start = start, .end = self.index }, .tag = .self_close_tag };
@@ -175,13 +176,24 @@ pub fn next(self: *Self) Token {
                 self.index += 1;
                 continue :state .before_attribute_name;
             },
-            0, '/', '>' => {
-                self.state = .after_attribute_name;
-                break :state .{ .loc = .{ .start = start, .end = self.index - 1 }, .tag = .attribute_name };
+            '/' => {
+                self.close_type = .self_close;
+                self.index += 1;
+                continue :state .self_closing_start_tag;
             },
-            '=' => {
-                self.state = .attribute_name;
-                break :state .{ .loc = .{ .start = start, .end = self.index - 1 }, .tag = .attribute_name };
+            '>' => {
+                const gt = self.index;
+                self.index += 1;
+                self.state = .data;
+                if (self.close_type == .true) {
+                    break :state .{ .loc = .{ .start = start, .end = gt }, .tag = .close_tag };
+                } else {
+                    break :state .{ .loc = .{ .start = gt, .end = self.index }, .tag = .r_bracket };
+                }
+            },
+            0 => {
+                self.state = .eof;
+                break :state .{ .loc = .{ .start = start, .end = self.index }, .tag = .invalid };
             },
             else => continue :state .attribute_name,
         },
@@ -218,11 +230,14 @@ pub fn next(self: *Self) Token {
                 continue :state .before_attribute_value;
             },
             '>' => {
-                const end = self.index;
+                const gt = self.index;
                 self.index += 1;
                 self.state = .data;
-                const tag: TokenTag = if (self.close_type == .true) .close_tag else .open_tag_end;
-                break :state .{ .loc = .{ .start = start, .end = end }, .tag = tag };
+                if (self.close_type == .true) {
+                    break :state .{ .loc = .{ .start = start, .end = gt }, .tag = .close_tag };
+                } else {
+                    break :state .{ .loc = .{ .start = gt, .end = self.index }, .tag = .r_bracket };
+                }
             },
             0 => {
                 self.state = .eof;
@@ -287,7 +302,7 @@ pub fn next(self: *Self) Token {
                 const end = self.index;
                 self.index += 1;
                 self.state = .data;
-                break :state .{ .loc = .{ .start = start, .end = end }, .tag = .open_tag_end };
+                break :state .{ .loc = .{ .start = end, .end = self.index }, .tag = .r_bracket };
             },
             0 => {
                 self.state = .eof;
@@ -319,11 +334,14 @@ pub fn next(self: *Self) Token {
                 continue :state .before_attribute_name;
             },
             '>' => {
-                const end = self.index;
+                const gt = self.index;
                 self.index += 1;
                 self.state = .data;
-                const tag: TokenTag = if (self.close_type == .true) .close_tag else .open_tag_end;
-                break :state .{ .loc = .{ .start = start, .end = end }, .tag = tag };
+                if (self.close_type == .true) {
+                    break :state .{ .loc = .{ .start = start, .end = gt }, .tag = .close_tag };
+                } else {
+                    break :state .{ .loc = .{ .start = start, .end = self.index }, .tag = .r_bracket };
+                }
             },
             else => {
                 self.index += 1;
@@ -340,7 +358,7 @@ pub fn next(self: *Self) Token {
                 self.index += 2;
                 start = self.index;
                 continue :state .comment_start;
-            } else if (std.mem.startsWith(u8, self.buffer[self.index..], "DOCTYPE")) {
+            } else if (self.buffer[self.index..].len >= 7 and std.ascii.eqlIgnoreCase(self.buffer[self.index..][0..7], "doctype")) {
                 self.index += 7;
                 start = self.index;
                 continue :state .before_doctype_name;

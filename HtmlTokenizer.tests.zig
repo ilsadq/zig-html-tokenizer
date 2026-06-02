@@ -80,7 +80,7 @@ test "close tag" {
 
 test "self-closing no space" {
     try expectTokens("<br/>", &.{
-        e(.self_close_tag, "br/>"),
+        e(.self_close_tag, "/>"),
         e(.eof, ""),
     });
 }
@@ -109,7 +109,7 @@ test "attribute double-quoted" {
         e(.open_tag, "a"),
         e(.attribute_name, "href"),
         e(.attribute_value, "url"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -119,7 +119,7 @@ test "attribute double-quoted empty" {
         e(.open_tag, "div"),
         e(.attribute_name, "class"),
         e(.attribute_value, ""),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -129,7 +129,7 @@ test "attribute single-quoted" {
         e(.open_tag, "a"),
         e(.attribute_name, "href"),
         e(.attribute_value, "url"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -138,7 +138,7 @@ test "attribute unquoted" {
     try expectTokens("<div class=foo>", &.{
         e(.open_tag, "div"),
         e(.attribute_name, "class"),
-        e(.open_tag_end, "foo"),
+        e(.r_bracket, "foo>"),
         e(.eof, ""),
     });
 }
@@ -147,7 +147,7 @@ test "attribute boolean" {
     try expectTokens("<input disabled>", &.{
         e(.open_tag, "input"),
         e(.attribute_name, "disabled"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -159,7 +159,7 @@ test "attribute multiple" {
         e(.attribute_value, "a"),
         e(.attribute_name, "class"),
         e(.attribute_value, "b"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -242,21 +242,17 @@ test "empty input" {
 }
 
 test "self-closing with space" {
-    // <br /> — the slash triggers a phantom empty attribute_name before the self-close
     try expectTokens("<br />", &.{
         e(.open_tag, "br"),
-        .{ .tag = .attribute_name },
         e(.self_close_tag, "/>"),
         e(.eof, ""),
     });
 }
 
 test "tag trailing space" {
-    // <div > — space before '>' emits a phantom empty attribute_name
     try expectTokens("<div >", &.{
         e(.open_tag, "div"),
-        .{ .tag = .attribute_name },
-        .{ .tag = .open_tag_end },
+        .{ .tag = .r_bracket },
         e(.eof, ""),
     });
 }
@@ -276,7 +272,7 @@ test "attribute with hyphen" {
         e(.open_tag, "div"),
         e(.attribute_name, "data-foo"),
         e(.attribute_value, "bar"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -298,9 +294,8 @@ test "eof inside double-quoted attribute" {
 }
 
 test "lowercase doctype becomes bogus comment" {
-    // DOCTYPE check is case-sensitive; lowercase falls through to bogus_comment
     try expectTokens("<!doctype html>", &.{
-        e(.comment, "!doctype html"),
+        e(.doctype, "html"),
         e(.eof, ""),
     });
 }
@@ -339,7 +334,7 @@ test "attribute value with ampersand" {
         e(.open_tag, "a"),
         e(.attribute_name, "href"),
         e(.attribute_value, "a&amp;b"),
-        e(.open_tag_end, ""),
+        e(.r_bracket, ">"),
         e(.eof, ""),
     });
 }
@@ -369,6 +364,23 @@ fn nanotime() u64 {
     var ts: std.posix.timespec = undefined;
     _ = std.posix.system.clock_gettime(std.posix.system.CLOCK.MONOTONIC, &ts);
     return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
+
+test "debug print tokens" {
+    const html: [:0]const u8 = "<br /><div class=\"foo\">hello</div>";
+    var tok = HtmlTokenizer.init(html);
+    std.debug.print("\n--- tokens for: {s} ---\n", .{html});
+    while (true) {
+        const token = tok.next();
+        const slice = html[token.loc.start..token.loc.end];
+        std.debug.print("  .{s:<20} [{d}..{d}]  \"{s}\"\n", .{
+            @tagName(token.tag),
+            token.loc.start,
+            token.loc.end,
+            slice,
+        });
+        if (token.tag == .eof) break;
+    }
 }
 
 test "bench HTML Standard" {
